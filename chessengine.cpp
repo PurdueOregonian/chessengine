@@ -8,6 +8,7 @@
 #include <functional>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
 #define RANDOM_SEED 581259915
 #define EXACT_VALUE 0
 #define LOWER_BOUND 1
@@ -764,8 +765,18 @@ resultingPositions generateMoves(chessPosition* cp, int bound, bool lastNullMove
     
     cp->depth += 2;
     resultingPositions iterative = generateMoves(cp,bound,lastNullMove,killerRp);
+    int evalFromIterative = iterative.eval;
     cp->depth -= 2;
-    
+    int trueBound = bound;
+    if(toMove == -1){
+        //Black to move. Set guess for bound at previous eval minus 0.25
+        bound = std::max(trueBound,evalFromIterative-25);
+    }
+    else{
+        //White to move. Set guess for bound at previous eval plus 0.25
+        bound = std::min(trueBound,evalFromIterative+25);
+    }
+    int numWindowFails = 0;
 
     for(int i=0; i<moves.size(); i++){
         
@@ -824,6 +835,18 @@ resultingPositions generateMoves(chessPosition* cp, int bound, bool lastNullMove
             //rp.captures.push_back(newCp);
             legalMoves++;
             if((toMove == 1 && newRp.eval >= bound)||(toMove == -1 && newRp.eval <= bound)){
+                if(bound != trueBound){
+                    //failed with aspiration window, search again
+                    numWindowFails++;
+                    if(toMove == -1){
+                        bound = std::max(trueBound, evalFromIterative-25*(int)round(exp2(numWindowFails)));
+                    }
+                    else{
+                        bound = std::min(trueBound, evalFromIterative+25*(int)round(exp2(numWindowFails)));
+                    }
+                    i--;
+                    continue;
+                }
                 rp.eval = newRp.eval;
                 rp.boundType = toMove;
                 rp.fromSquare = moves[i]->fromSquare;
