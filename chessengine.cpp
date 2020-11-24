@@ -347,6 +347,8 @@ void reverseMove(chessPosition*, move*);
 
 int staticExchangeEvaluation(chessPosition*, move*);
 
+bool hasAttacker(chessPosition*, int, int);
+
 //int staticExchangeEvaluationContinue(chessPosition*, int);
 
 int staticExchangeEvaluationContinue(std::array<std::vector<int>,18>*, int, int);
@@ -761,12 +763,80 @@ resultingPositions generateMoves(chessPosition* cp, int bound, bool lastNullMove
     
     //printf("%d\n",moves.size());
 
+    //use reduced depth search to order the moves. Currently too slow to use
+    /*
+    std::vector<int> evals = std::vector<int>();
+    cp->depth += 2;
+    for(int i=0; i<moves.size(); i++){
+        resultingPositions killerRp;
+        afterMove(cp, moves[i]);
+        cp->toMove = -cp->toMove;
+        if(!kingInDanger(cp)){
+            cp->toMove = -cp->toMove;
+            cp->depth += 1;
+            resultingPositions newRp;
+
+            newRp = generateMoves(cp, rp.eval, false, killerRp);
+            evals.push_back(newRp.eval);
+
+            killerRp = newRp;
+
+            
+            cp->depth -= 1;
+            reverseMove(cp, moves[i]);
+            cp->fiftyMove = oldFiftyMove;
+            cp->enPassantTargetSquare = oldEnPassantTargetSquare;
+            std::copy(castling,castling+4, cp->castling);
+            //rp.captures.push_back(newCp);
+            legalMoves++;
+        }
+        else{
+                cp->toMove = -cp->toMove;
+                reverseMove(cp, moves[i]);
+                cp->fiftyMove = oldFiftyMove;
+                cp->enPassantTargetSquare = oldEnPassantTargetSquare;
+                std::copy(castling,castling+4, cp->castling);
+                delete(moves.at(i));
+                moves.erase(moves.begin()+i);
+                i--;
+            }
+    }
+    cp->depth -= 2;
+    
+
+    int evalFromIterative;
+    if(cp->toMove == 1){
+        evalFromIterative = -99999;
+        for(int i=0; i<evals.size(); i++){
+            if(evals.at(i)>evalFromIterative){
+                evalFromIterative = evals.at(i);
+            }
+        }
+        for(int i=0; i<moves.size(); i++){
+            moves.at(i)->priority = ITERATIVE_BEST_PRIORITY + (evalFromIterative - evals.at(i));
+        }
+    }
+    else{
+        evalFromIterative = 99999;
+        for(int i=0; i<evals.size(); i++){
+            if(evals.at(i)<evalFromIterative){
+                evalFromIterative = evals.at(i);
+            }
+        }
+        for(int i=0; i<moves.size(); i++){
+            moves.at(i)->priority = ITERATIVE_BEST_PRIORITY - (evalFromIterative - evals.at(i));
+        }
+    }
+    */
+
     //iterative deepening I guess
+    
     
     cp->depth += 2;
     resultingPositions iterative = generateMoves(cp,bound,lastNullMove,killerRp);
     int evalFromIterative = iterative.eval;
     cp->depth -= 2;
+    
     int trueBound = bound;
     if(toMove == -1){
         //Black to move. Set guess for bound at previous eval minus 0.25
@@ -1332,9 +1402,16 @@ int staticExchangeEvaluation(chessPosition* cp, move* m){
     //chessPosition cp2 = *cp;
     
     //too slow so do this instead for now
+    
     int value = 0;
     int captureValue = pieceValues[cp->piece[m->toSquare]];
-    return captureValue - pieceValues[cp->piece[m->fromSquare]];
+    if(hasAttacker(cp,m->toSquare,-cp->toMove)){
+        return captureValue - pieceValues[cp->piece[m->fromSquare]];
+    }
+    else{
+        return captureValue;
+    }
+    
     /*
     afterMove(cp,m);
     std::array<std::vector<int>,18> attackers = getAllAttackers(cp,m->toSquare);
@@ -1342,6 +1419,7 @@ int staticExchangeEvaluation(chessPosition* cp, move* m){
     reverseMove(cp,m);
     
     //comment from
+    
     for(int i=0; i<64; i++){
         if(cp2.piece[i] != cp->piece[i] || cp2.color[i] != cp->color[i]){
             printf("badpiece %d\n", i);
@@ -1350,10 +1428,12 @@ int staticExchangeEvaluation(chessPosition* cp, move* m){
             printf("badcolor %d\n", i);
         }
     }
+    
     //comment to
     
     return value;
     */
+    
 }
 
 std::array<std::vector<int>,18> getAllAttackers(chessPosition* cp, int square){
@@ -1534,6 +1614,164 @@ std::array<std::vector<int>,18> getAllAttackers(chessPosition* cp, int square){
     */
     //printf("here\n");
     return allAttackers;
+}
+
+bool hasAttacker(chessPosition* cp, int square, int colorToFind){
+    int smallestAttacker = 99999;
+    int squareOfSmallestAttacker = -1;
+    for(int i=0; i<8; i++){
+            int destination = square;
+            destination = mailbox[mailbox64[destination] + offsets[2][i]];
+            if(destination == -1){
+                continue;
+            }
+            if(cp->piece[destination] == 2){
+                if(cp->color[destination] == colorToFind){
+                    return true;
+                    //smallestAttacker = 300;
+                    //squareOfSmallestAttacker = destination;
+                }
+            }
+        }
+        //printf("here\n");
+        for(int i=0; i<4; i++){
+            //printf("%d\n",i);
+            int spacesAway = 0;
+                    for(int destination = square;;){
+                        spacesAway++;
+                        destination = mailbox[mailbox64[destination] + offsets[3][i]];
+                        //printf("%d\n", square);
+                        //printf("%d\n", destination);
+                        if(destination == -1){
+                            break;
+                        }
+                        if(cp->color[destination] != 0){
+                            if(cp->piece[destination] == 1 || cp->piece[destination] == 6){
+                                if(spacesAway > 1){
+                                    break;
+                                }
+                            }
+                            if(cp->piece[destination] == 3){
+                                if(cp->color[destination] == colorToFind){
+                                    return true;
+                                }
+                            }
+                            else if(cp->piece[destination] == 5){
+                                if(cp->color[destination] == colorToFind){
+                                    return true;
+                                }
+                            }
+                            else if(cp->piece[destination] == 6){
+                                if(cp->color[destination] == colorToFind){
+                                    return true;
+                                }
+                            }
+                            else if(cp->piece[destination] == 1){
+                                if(cp->color[destination] == -1 && colorToFind == -1 && (i==0 || i==1)){
+                                    return true;
+                                }
+                                else if (cp->color[destination] == 1 && colorToFind == 1 && (i==2 || i==3)){
+                                    return true;
+                                }
+                            }
+                            else{
+                                break;
+                            }
+                            /*
+                            if(cp->color[destination] == cp->toMove){
+                                    if(cp->piece[destination] == 3 && smallestAttacker > 300){
+                                        //printf("%d\n", destination);
+                                        //printf("here\n");
+                                        smallestAttacker = 300;
+                                        squareOfSmallestAttacker = destination;
+                                    }
+                                    if(cp->piece[destination] == 5 && smallestAttacker > 900){
+                                        smallestAttacker = 900;
+                                        squareOfSmallestAttacker = destination;
+                                    }
+                            }
+                            
+                            break;
+                            */
+                        }
+                    }
+                }
+                int spacesAway = 0;
+                for(int i=0; i<4; i++){
+                    //printf("%d\n",i);
+                    for(int destination = square;;){
+                        spacesAway++;
+                        destination = mailbox[mailbox64[destination] + offsets[4][i]];
+                        if(destination == -1){
+                            break;
+                        }
+                        if(cp->color[destination] != 0){
+                            if(cp->piece[destination] == 6){
+                                if(spacesAway > 1){
+                                    break;
+                                }
+                            }
+                            if(cp->piece[destination] == 4){
+                                if(cp->color[destination] == colorToFind){
+                                    return true;
+                                }
+                            }
+                            else if(cp->piece[destination] == 5){
+                                if(cp->color[destination] == colorToFind){
+                                    return true;
+                                }
+                            }
+                            else if(cp->piece[destination] == 6){
+                                if(cp->color[destination] == colorToFind){
+                                    return true;
+                                }
+                            }
+                            else{
+                                break;
+                            }
+                            /*
+                            if(cp->color[destination] == cp->toMove){
+                                    if(cp->piece[destination] == 4 && smallestAttacker > 500){
+                                        //printf("%d\n", destination);
+                                        //printf("here\n");
+                                        smallestAttacker = 500;
+                                        squareOfSmallestAttacker = destination;
+                                    }
+                                    if(cp->piece[destination] == 5 && smallestAttacker > 900){
+                                        smallestAttacker = 900;
+                                        squareOfSmallestAttacker = destination;
+                                    }
+                            }
+                            break;
+                            */
+                        }
+                    }
+                }
+    //printf("here\n");
+    /*
+    for(int i=0; i<8; i++){
+        int destination = mailbox[mailbox64[square] + offsets[5][i]];
+        if(destination == -1){
+            continue;
+        }
+        if(cp->color[destination]==cp->toMove && cp->piece[destination] == 6 && smallestAttacker > 10000){
+            smallestAttacker = 10000;
+            squareOfSmallestAttacker = destination;
+        }
+        if(cp->toMove==1 && (i==5 || i==7) && cp->color[destination]==cp->toMove && cp->piece[destination] == 1){
+            //check for black pawn
+            smallestAttacker = 100;
+            squareOfSmallestAttacker = destination;
+        }
+        if(cp->toMove==-1 && (i==0 || i==2) && cp->color[destination]==cp->toMove && cp->piece[destination] == 1){
+            //check for white pawn
+            smallestAttacker = 100;
+            squareOfSmallestAttacker = destination;
+        }
+    }
+    */
+    //printf("here\n");
+    return false;
 }
 
 bool kingInDanger(chessPosition* cp){
