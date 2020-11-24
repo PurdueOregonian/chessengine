@@ -832,12 +832,16 @@ resultingPositions generateMoves(chessPosition* cp, int bound, bool lastNullMove
     //iterative deepening I guess
     
     
+    resultingPositions iterative;
+    int trueBound = bound;
+    int evalFromIterative = 0;
+
+    if(cp->depth < MAX_DEPTH - 2){
     cp->depth += 2;
-    resultingPositions iterative = generateMoves(cp,bound,lastNullMove,killerRp);
-    int evalFromIterative = iterative.eval;
+    iterative = generateMoves(cp,bound,lastNullMove,killerRp);
+    evalFromIterative = iterative.eval;
     cp->depth -= 2;
     
-    int trueBound = bound;
     if(toMove == -1){
         //Black to move. Set guess for bound at previous eval minus 0.25
         bound = std::max(trueBound,evalFromIterative-25);
@@ -846,16 +850,24 @@ resultingPositions generateMoves(chessPosition* cp, int bound, bool lastNullMove
         //White to move. Set guess for bound at previous eval plus 0.25
         bound = std::min(trueBound,evalFromIterative+25);
     }
+    }
     int numWindowFails = 0;
 
-    for(int i=0; i<moves.size(); i++){
-        
-        if(moves[i]->fromSquare == iterative.fromSquare && moves[i]->toSquare == iterative.toSquare && moves[i]->promotionPiece == iterative.promotionPiece){
-            moves[i]->priority = ITERATIVE_BEST_PRIORITY;
+    if(cp->depth < MAX_DEPTH - 2){
+        for(int i=0; i<moves.size(); i++){
+            if(moves[i]->fromSquare == iterative.fromSquare && moves[i]->toSquare == iterative.toSquare && moves[i]->promotionPiece == iterative.promotionPiece){
+                moves[i]->priority = ITERATIVE_BEST_PRIORITY;
+            }
+            if(moves[i]->fromSquare == killerRp.fromSquare && moves[i]->toSquare == killerRp.toSquare && moves[i]->promotionPiece == killerRp.promotionPiece){
+                moves[i]->priority -= KILLER_PRIORITY_BONUS;
+            }
         }
-        
-        if(moves[i]->fromSquare == killerRp.fromSquare && moves[i]->toSquare == killerRp.toSquare && moves[i]->promotionPiece == killerRp.promotionPiece){
-            moves[i]->priority -= KILLER_PRIORITY_BONUS;
+    }
+    else{
+        for(int i=0; i<moves.size(); i++){
+            if(moves[i]->fromSquare == killerRp.fromSquare && moves[i]->toSquare == killerRp.toSquare && moves[i]->promotionPiece == killerRp.promotionPiece){
+                moves[i]->priority -= KILLER_PRIORITY_BONUS;
+            }
         }
     }
 
