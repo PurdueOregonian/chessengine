@@ -17,11 +17,12 @@
 #define QUIET_MOVE_PRIORITY 51
 //-1 to disable
 #define QUIET_STATIC_DEPTH 0
-#define MAX_DEPTH 5
+#define MAX_DEPTH 6
 #define NULL_MOVE_DEPTH -1
 #define KILLER_PRIORITY_BONUS 2
 #define KILLER_PRIORITY_BONUS_QUIESCENCE 10
 #define ITERATIVE_BEST_PRIORITY 25
+#define QUIESCENCE_SEARCH false
 
 bool printTimeStats = true;
 bool printTotalTimeStats = true;
@@ -459,7 +460,12 @@ resultingPositions generateMoves(chessPosition* cp, int bound, bool lastNullMove
 
     if(cp->depth >= maxDepth){
         resultingPositions dummy;
-        rp.eval = evaluatePositionToQuiet(cp, rp.eval, dummy).eval;
+        if(QUIESCENCE_SEARCH){
+            rp.eval = evaluatePositionToQuiet(cp, rp.eval, dummy).eval;
+        }
+        else{
+            rp.eval = evaluatePosition(cp);
+        }
         return rp;
         //printf("%d\n",rp.eval);
     }
@@ -1292,9 +1298,6 @@ resultingPositions evaluatePositionToQuiet(chessPosition* cp, int bound, resulti
     //doing nothing could be better than capturing
     if((cp->toMove == 1 && doNothingEval >= bound)||(cp->toMove == -1 && doNothingEval <= bound)){
         rp.eval = doNothingEval;
-        for(int j=0; j<moves.size(); j++){
-            delete(moves[j]);
-        }
         /*
         hashTable[hashMod].valid = true;
         hashTable[hashMod].moveToPlay = rp;
